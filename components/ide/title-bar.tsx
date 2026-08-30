@@ -10,20 +10,21 @@ export function TitleBar({
   chatOpen,
   onToggleChat,
   onOpenQuickOpen,
+  onRun,
 }: {
   chatOpen: boolean
   onToggleChat: () => void
   onOpenQuickOpen: () => void
+  onRun?: () => void
 }) {
   const [runState, setRunState] = useState<RunState>('idle')
 
   function handleRun() {
     if (runState !== 'idle') return
     setRunState('running')
-    window.setTimeout(() => {
-      setRunState('done')
-      window.setTimeout(() => setRunState('idle'), 1600)
-    }, 1100)
+    onRun?.()
+    window.setTimeout(() => setRunState('done'), 400)
+    window.setTimeout(() => setRunState('idle'), 2000)
   }
 
   return (

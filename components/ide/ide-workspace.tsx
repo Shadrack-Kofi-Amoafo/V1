@@ -12,6 +12,7 @@ import { ChatPanel } from '@/components/ide/chat-panel'
 import { TitleBar } from '@/components/ide/title-bar'
 import { StatusBar } from '@/components/ide/status-bar'
 import { QuickOpen } from '@/components/ide/quick-open'
+import { TerminalPanel } from '@/components/ide/terminal-panel'
 import { fileTree as fallbackFileTree, fileContents as fallbackFileContents, type FileNode } from '@/lib/ide-data'
 
 function findNode(nodes: FileNode[], path: string): FileNode | undefined {
@@ -79,6 +80,7 @@ export function IdeWorkspace() {
   const [files, setFiles] = useState<Record<string, string>>(fallbackFileContents)
   const [dirtyPaths, setDirtyPaths] = useState<Set<string>>(new Set())
   const [workspaceError, setWorkspaceError] = useState<string | null>(null)
+  const [terminalOpen, setTerminalOpen] = useState(false)
 
   async function loadWorkspace(selectFirst = false) {
     const response = await fetch('/api/workspace')
@@ -224,6 +226,7 @@ export function IdeWorkspace() {
         chatOpen={chatOpen}
         onToggleChat={() => setChatOpen((v) => !v)}
         onOpenQuickOpen={() => setQuickOpenOpen(true)}
+        onRun={() => setTerminalOpen(true)}
       />
       <div className="flex flex-1 overflow-hidden">
         <ActivityRail active={sidebarView} onSelect={(id) => setSidebarView(id as SidebarView)} />
@@ -259,6 +262,7 @@ export function IdeWorkspace() {
               onSave={() => void saveFile(activeNode.path)}
             />
           )}
+          {terminalOpen && <TerminalPanel onClose={() => setTerminalOpen(false)} />}
         </div>
 
         {chatOpen && (
