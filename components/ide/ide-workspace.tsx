@@ -252,6 +252,7 @@ export function IdeWorkspace() {
           )}
           {activeNode && (
             <CodeEditor
+              key={activeNode.path}
               path={activeNode.path}
               content={files[activeNode.path] ?? ''}
               onChange={(content) => updateFile(activeNode.path, content)}
