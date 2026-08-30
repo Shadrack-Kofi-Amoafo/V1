@@ -8,6 +8,26 @@ export type Diagnostic = { file: string; line: number; column: number; message: 
 export function TerminalPanel({ onClose, onDiagnostics }: { onClose: () => void; onDiagnostics: (diagnostics: Diagnostic[]) => void }) {
   const [output, setOutput] = useState('Local runner ready. Use Run to execute the project typecheck.\n')
   const [running, setRunning] = useState(false)
+  const [command, setCommand] = useState('git status --short')
+
+  async function runCommand(value: string) {
+    if (!value.trim() || running) return
+    setRunning(true)
+    setOutput(`$ ${value}\n`)
+    try {
+      const response = await fetch('/api/terminal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: value }),
+      })
+      const result = await response.json()
+      setOutput(`$ ${value}\n${result.output ?? result.error ?? 'No output'}\n\nExit code: ${result.exitCode ?? 0}`)
+    } catch (error) {
+      setOutput(error instanceof Error ? error.message : 'Terminal unavailable')
+    } finally {
+      setRunning(false)
+    }
+  }
 
   async function run(script: 'typecheck' | 'lint' | 'build') {
     setRunning(true)
@@ -41,6 +61,11 @@ export function TerminalPanel({ onClose, onDiagnostics }: { onClose: () => void;
           </button>
         </div>
       </div>
+      <form className="flex items-center gap-1 border-b border-border px-3 py-1.5" onSubmit={(event) => { event.preventDefault(); void runCommand(command) }}>
+        <span className="font-mono text-[11px] text-muted-foreground">$</span>
+        <input value={command} onChange={(event) => setCommand(event.target.value)} disabled={running} aria-label="Terminal command" className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none" />
+        <button type="submit" disabled={running || !command.trim()} className="rounded border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50">Run</button>
+      </form>
       <div className="flex items-center gap-1 border-b border-border px-3 py-1.5">
         {(['typecheck', 'lint', 'build'] as const).map((script) => (
           <button key={script} type="button" disabled={running} onClick={() => void run(script)} className="rounded border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50">
