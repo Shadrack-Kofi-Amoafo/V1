@@ -12,7 +12,7 @@ import { ChatPanel } from '@/components/ide/chat-panel'
 import { TitleBar } from '@/components/ide/title-bar'
 import { StatusBar } from '@/components/ide/status-bar'
 import { QuickOpen } from '@/components/ide/quick-open'
-import { TerminalPanel } from '@/components/ide/terminal-panel'
+import { TerminalPanel, type Diagnostic } from '@/components/ide/terminal-panel'
 import { fileTree as fallbackFileTree, fileContents as fallbackFileContents, type FileNode } from '@/lib/ide-data'
 
 function findNode(nodes: FileNode[], path: string): FileNode | undefined {
@@ -81,7 +81,7 @@ export function IdeWorkspace() {
   const [dirtyPaths, setDirtyPaths] = useState<Set<string>>(new Set())
   const [workspaceError, setWorkspaceError] = useState<string | null>(null)
   const [terminalOpen, setTerminalOpen] = useState(false)
-  const [diagnosticCount, setDiagnosticCount] = useState(0)
+  const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([])
 
   async function loadWorkspace(selectFirst = false) {
     const response = await fetch('/api/workspace')
@@ -261,9 +261,10 @@ export function IdeWorkspace() {
               content={files[activeNode.path] ?? ''}
               onChange={(content) => updateFile(activeNode.path, content)}
               onSave={() => void saveFile(activeNode.path)}
+              diagnostics={diagnostics}
             />
           )}
-          {terminalOpen && <TerminalPanel onClose={() => setTerminalOpen(false)} onDiagnostics={(diagnostics) => setDiagnosticCount(diagnostics.length)} />}
+          {terminalOpen && <TerminalPanel onClose={() => setTerminalOpen(false)} onDiagnostics={setDiagnostics} />}
         </div>
 
         {chatOpen && (
@@ -272,7 +273,7 @@ export function IdeWorkspace() {
           </div>
         )}
       </div>
-      <StatusBar language={activeNode?.language ?? 'plaintext'} problems={diagnosticCount} />
+      <StatusBar language={activeNode?.language ?? 'plaintext'} problems={diagnostics.length} />
 
       <QuickOpen open={quickOpenOpen} onOpenChange={setQuickOpenOpen} onSelectFile={openFile} tree={fileTree} />
     </div>

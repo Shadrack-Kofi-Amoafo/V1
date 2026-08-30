@@ -1,6 +1,10 @@
 'use client'
 
-import Editor, { type OnMount } from '@monaco-editor/react'
+import { useEffect, useRef } from 'react'
+import Editor, { type Monaco, type OnMount } from '@monaco-editor/react'
+import type { editor as MonacoEditor } from 'monaco-editor'
+
+type Diagnostic = { file: string; line: number; column: number; message: string; severity: 'error' | 'warning' }
 function languageForPath(path: string) {
   const extension = path.split('.').pop()?.toLowerCase()
   if (extension === 'tsx') return 'typescript'
@@ -19,13 +23,39 @@ export function CodeEditor({
   content,
   onChange,
   onSave,
+  diagnostics = [],
 }: {
   path: string
   content: string
   onChange: (content: string) => void
   onSave: () => void
+  diagnostics?: Diagnostic[]
 }) {
-  const handleMount: OnMount = (editor) => {
+  const editorRef = useRef<MonacoEditor.IStandaloneCodeEditor | null>(null)
+  const monacoRef = useRef<Monaco | null>(null)
+
+  useEffect(() => {
+    const editor = editorRef.current
+    const monaco = monacoRef.current
+    const model = editor?.getModel()
+    if (!editor || !monaco || !model) return
+    const markers = diagnostics
+      .filter((diagnostic) => diagnostic.file === path || diagnostic.file.endsWith(`/${path}`))
+      .map((diagnostic) => ({
+        startLineNumber: diagnostic.line,
+        endLineNumber: diagnostic.line,
+        startColumn: diagnostic.column,
+        endColumn: diagnostic.column + 1,
+        message: diagnostic.message,
+        severity: diagnostic.severity === 'error' ? monaco.MarkerSeverity.Error : monaco.MarkerSeverity.Warning,
+      }))
+    monaco.editor.setModelMarkers(model, 'local-runner', markers)
+  }, [diagnostics, path])
+
+  const handleMount: OnMount = (editor, monaco) => {
+    editorRef.current = editor
+    monacoRef.current = monaco
+    editor.addCommand(2048 | 49, onSave) // Ctrl/Cmd + S
     editor.addCommand(2048 | 49, onSave) // Ctrl/Cmd + S
   }
 

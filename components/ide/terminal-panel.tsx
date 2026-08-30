@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { X, Trash2 } from 'lucide-react'
 
-type Diagnostic = { file: string; line: number; column: number; message: string; severity: 'error' | 'warning' }
+export type Diagnostic = { file: string; line: number; column: number; message: string; severity: 'error' | 'warning' }
 
 export function TerminalPanel({ onClose, onDiagnostics }: { onClose: () => void; onDiagnostics: (diagnostics: Diagnostic[]) => void }) {
   const [output, setOutput] = useState('Local runner ready. Use Run to execute the project typecheck.\n')
