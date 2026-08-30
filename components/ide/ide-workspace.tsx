@@ -81,6 +81,7 @@ export function IdeWorkspace() {
   const [dirtyPaths, setDirtyPaths] = useState<Set<string>>(new Set())
   const [workspaceError, setWorkspaceError] = useState<string | null>(null)
   const [terminalOpen, setTerminalOpen] = useState(false)
+  const [diagnosticCount, setDiagnosticCount] = useState(0)
 
   async function loadWorkspace(selectFirst = false) {
     const response = await fetch('/api/workspace')
@@ -262,7 +263,7 @@ export function IdeWorkspace() {
               onSave={() => void saveFile(activeNode.path)}
             />
           )}
-          {terminalOpen && <TerminalPanel onClose={() => setTerminalOpen(false)} />}
+          {terminalOpen && <TerminalPanel onClose={() => setTerminalOpen(false)} onDiagnostics={(diagnostics) => setDiagnosticCount(diagnostics.length)} />}
         </div>
 
         {chatOpen && (
@@ -271,7 +272,7 @@ export function IdeWorkspace() {
           </div>
         )}
       </div>
-      <StatusBar language={activeNode?.language ?? 'plaintext'} />
+      <StatusBar language={activeNode?.language ?? 'plaintext'} problems={diagnosticCount} />
 
       <QuickOpen open={quickOpenOpen} onOpenChange={setQuickOpenOpen} onSelectFile={openFile} tree={fileTree} />
     </div>

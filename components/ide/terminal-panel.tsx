@@ -3,7 +3,9 @@
 import { useState } from 'react'
 import { X, Trash2 } from 'lucide-react'
 
-export function TerminalPanel({ onClose }: { onClose: () => void }) {
+type Diagnostic = { file: string; line: number; column: number; message: string; severity: 'error' | 'warning' }
+
+export function TerminalPanel({ onClose, onDiagnostics }: { onClose: () => void; onDiagnostics: (diagnostics: Diagnostic[]) => void }) {
   const [output, setOutput] = useState('Local runner ready. Use Run to execute the project typecheck.\n')
   const [running, setRunning] = useState(false)
 
@@ -17,6 +19,7 @@ export function TerminalPanel({ onClose }: { onClose: () => void }) {
         body: JSON.stringify({ script }),
       })
       const result = await response.json()
+      onDiagnostics(result.diagnostics ?? [])
       setOutput(`${result.output ?? result.error ?? 'No output'}\n\nExit code: ${result.exitCode ?? 0}`)
     } catch (error) {
       setOutput(error instanceof Error ? error.message : 'Runner unavailable')
