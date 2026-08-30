@@ -80,23 +80,45 @@ export function IdeWorkspace() {
   const [dirtyPaths, setDirtyPaths] = useState<Set<string>>(new Set())
   const [workspaceError, setWorkspaceError] = useState<string | null>(null)
 
+  async function loadWorkspace(selectFirst = false) {
+    const response = await fetch('/api/workspace')
+    if (!response.ok) throw new Error('Unable to load the local workspace')
+    const workspace = await response.json() as { tree: FileNode[]; files: { path: string; content: string }[] }
+    setFileTree(workspace.tree)
+    setFiles(Object.fromEntries(workspace.files.map((file) => [file.path, file.content])))
+    if (selectFirst) {
+      const firstFile = workspace.files[0]?.path
+      if (firstFile) {
+        setOpenPaths([firstFile])
+        setActivePath(firstFile)
+      }
+    }
+  }
+
   useEffect(() => {
-    fetch('/api/workspace')
-      .then(async (response) => {
-        if (!response.ok) throw new Error('Unable to load the local workspace')
-        return response.json() as Promise<{ tree: FileNode[]; files: { path: string; content: string }[] }>
-      })
-      .then((workspace) => {
-        setFileTree(workspace.tree)
-        setFiles(Object.fromEntries(workspace.files.map((file) => [file.path, file.content])))
-        const firstFile = workspace.files[0]?.path
-        if (firstFile) {
-          setOpenPaths([firstFile])
-          setActivePath(firstFile)
-        }
-      })
-      .catch((error: unknown) => setWorkspaceError(error instanceof Error ? error.message : 'Workspace unavailable'))
+    loadWorkspace(true).catch((error: unknown) => setWorkspaceError(error instanceof Error ? error.message : 'Workspace unavailable'))
   }, [])
+
+  async function createWorkspaceItem(type: 'file' | 'folder') {
+    const itemPath = window.prompt(`Path for new ${type} (relative to the workspace)`)
+    if (!itemPath?.trim()) return
+    const response = await fetch('/api/workspace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'create', type, path: itemPath.trim() }),
+    })
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}))
+      setWorkspaceError(result.error ?? `Unable to create ${type}`)
+      return
+    }
+    await loadWorkspace()
+    if (type === 'file') {
+      const path = itemPath.trim()
+      setOpenPaths((previous) => previous.includes(path) ? previous : [...previous, path])
+      setActivePath(path)
+    }
+  }
 
   const openTabs = openPaths
     .map((path) => findNode(fileTree, path))
@@ -132,6 +154,41 @@ export function IdeWorkspace() {
       next.delete(path)
       return next
     })
+  }
+
+  async function renameWorkspaceItem(node: FileNode) {
+    const nextName = window.prompt('New path', node.path)?.trim()
+    if (!nextName || nextName === node.path) return
+    const response = await fetch('/api/workspace', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'rename', path: node.path, newPath: nextName }),
+    })
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}))
+      setWorkspaceError(result.error ?? 'Unable to rename item')
+      return
+    }
+    setOpenPaths((previous) => previous.map((path) => path === node.path ? nextName : path))
+    if (activePath === node.path) setActivePath(nextName)
+    await loadWorkspace()
+  }
+
+  async function deleteWorkspaceItem(node: FileNode) {
+    if (!window.confirm(`Delete ${node.path}? This cannot be undone.`)) return
+    const response = await fetch('/api/workspace', {
+      method: 'DELETE',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: node.path }),
+    })
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}))
+      setWorkspaceError(result.error ?? 'Unable to delete item')
+      return
+    }
+    setOpenPaths((previous) => previous.filter((path) => path !== node.path && !path.startsWith(`${node.path}/`)))
+    if (activePath === node.path || activePath.startsWith(`${node.path}/`)) setActivePath('')
+    await loadWorkspace()
   }
 
   function openFile(node: FileNode) {
@@ -173,7 +230,7 @@ export function IdeWorkspace() {
 
         <div className="w-60 shrink-0 border-r border-border bg-sidebar">
           {sidebarView === 'files' && (
-            <FileExplorer tree={fileTree} selectedPath={activePath} onSelectFile={openFile} />
+            <FileExplorer tree={fileTree} selectedPath={activePath} onSelectFile={openFile} onCreate={(type) => void createWorkspaceItem(type)} onRename={(node) => void renameWorkspaceItem(node)} onDelete={(node) => void deleteWorkspaceItem(node)} />
           )}
           {sidebarView === 'search' && <SearchPanel onSelectFile={openFile} tree={fileTree} fileContents={files} />}
           {sidebarView === 'git' && <SourceControlPanel />}

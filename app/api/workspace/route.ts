@@ -1,4 +1,4 @@
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readdir, readFile, rename, rm, stat, unlink, writeFile } from 'node:fs/promises'
 import path from 'node:path'
 import { NextResponse } from 'next/server'
 
@@ -91,5 +91,46 @@ export async function PUT(req: Request) {
     return NextResponse.json({ ok: true, path: body.path })
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to save file' }, { status: 400 })
+  }
+}
+
+export async function POST(req: Request) {
+  try {
+    const body = (await req.json()) as { action?: 'create' | 'rename'; path?: string; newPath?: string; type?: 'file' | 'folder' }
+    if (!body.path) return NextResponse.json({ error: 'path is required' }, { status: 400 })
+    const absolutePath = safePath(body.path)
+
+    if (body.action === 'create') {
+      if (body.type === 'folder') await mkdir(absolutePath, { recursive: false })
+      else await writeFile(absolutePath, '', { encoding: 'utf8', flag: 'wx' })
+      return NextResponse.json({ ok: true, path: body.path })
+    }
+
+    if (body.action === 'rename' && body.newPath) {
+      const newAbsolutePath = safePath(body.newPath)
+      await rename(absolutePath, newAbsolutePath)
+      return NextResponse.json({ ok: true, path: body.newPath })
+    }
+
+    return NextResponse.json({ error: 'Unsupported workspace operation' }, { status: 400 })
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to change workspace' }, { status: 400 })
+  }
+}
+
+export async function DELETE(req: Request) {
+  try {
+    const body = (await req.json()) as { path?: string }
+    if (!body.path) return NextResponse.json({ error: 'path is required' }, { status: 400 })
+    const absolutePath = safePath(body.path)
+    const entry = await stat(absolutePath)
+    if (entry.isDirectory()) {
+      await rm(absolutePath, { recursive: true, force: false })
+    } else {
+      await unlink(absolutePath)
+    }
+    return NextResponse.json({ ok: true, path: body.path })
+  } catch (error) {
+    return NextResponse.json({ error: error instanceof Error ? error.message : 'Unable to delete workspace item' }, { status: 400 })
   }
 }
