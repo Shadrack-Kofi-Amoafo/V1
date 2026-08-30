@@ -1,7 +1,7 @@
 'use client'
 
 import { FileCode } from 'lucide-react'
-import { flattenFiles, fileTree, type FileNode } from '@/lib/ide-data'
+import { flattenFiles, type FileNode } from '@/lib/ide-data'
 import {
   Command,
   CommandDialog,
@@ -16,12 +16,14 @@ export function QuickOpen({
   open,
   onOpenChange,
   onSelectFile,
+  tree,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSelectFile: (node: FileNode) => void
+  tree: FileNode[]
 }) {
-  const files = flattenFiles(fileTree)
+  const files = flattenFiles(tree)
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange} title="Go to file" description="Search files by name">

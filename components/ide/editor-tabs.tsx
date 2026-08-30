@@ -9,11 +9,13 @@ export function EditorTabs({
   activePath,
   onSelect,
   onClose,
+  dirtyPaths = new Set<string>(),
 }: {
   tabs: FileNode[]
   activePath: string
   onSelect: (path: string) => void
   onClose: (path: string) => void
+  dirtyPaths?: Set<string>
 }) {
   return (
     <div role="tablist" aria-label="Open files" className="flex h-10 shrink-0 items-stretch overflow-x-auto border-b border-border bg-card">
@@ -34,6 +36,7 @@ export function EditorTabs({
               <span className="absolute inset-x-0 top-0 h-[1.5px] bg-foreground" aria-hidden="true" />
             )}
             <span className="truncate">{tab.name}</span>
+            {dirtyPaths.has(tab.path) && <span className="size-1.5 shrink-0 rounded-full bg-foreground" aria-label="Unsaved changes" />}
             <button
               type="button"
               aria-label={`Close ${tab.name}`}

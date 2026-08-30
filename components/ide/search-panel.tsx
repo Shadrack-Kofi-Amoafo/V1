@@ -2,16 +2,20 @@
 
 import { useMemo, useState } from 'react'
 import { Search, FileCode } from 'lucide-react'
-import { flattenFiles, fileContents, fileTree, type FileNode } from '@/lib/ide-data'
+import { flattenFiles, type FileNode } from '@/lib/ide-data'
 import { cn } from '@/lib/utils'
 
 export function SearchPanel({
   onSelectFile,
+  tree,
+  fileContents,
 }: {
   onSelectFile: (node: FileNode) => void
+  tree: FileNode[]
+  fileContents: Record<string, string>
 }) {
   const [query, setQuery] = useState('')
-  const files = useMemo(() => flattenFiles(fileTree), [])
+  const files = useMemo(() => flattenFiles(tree), [tree])
 
   const results = useMemo(() => {
     if (!query.trim()) return []

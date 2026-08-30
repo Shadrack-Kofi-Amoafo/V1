@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ActivityRail } from '@/components/ide/activity-rail'
 import { FileExplorer } from '@/components/ide/file-explorer'
 import { SearchPanel } from '@/components/ide/search-panel'
@@ -12,7 +12,7 @@ import { ChatPanel } from '@/components/ide/chat-panel'
 import { TitleBar } from '@/components/ide/title-bar'
 import { StatusBar } from '@/components/ide/status-bar'
 import { QuickOpen } from '@/components/ide/quick-open'
-import { fileTree as initialFileTree, fileContents, type FileNode } from '@/lib/ide-data'
+import { fileTree as fallbackFileTree, fileContents as fallbackFileContents, type FileNode } from '@/lib/ide-data'
 
 function findNode(nodes: FileNode[], path: string): FileNode | undefined {
   for (const node of nodes) {
@@ -75,8 +75,28 @@ export function IdeWorkspace() {
   const [chatOpen, setChatOpen] = useState(true)
   const [sidebarView, setSidebarView] = useState<SidebarView>('files')
   const [quickOpenOpen, setQuickOpenOpen] = useState(false)
-  const [fileTree, setFileTree] = useState<FileNode[]>(initialFileTree)
-  const [files, setFiles] = useState<Record<string, string>>(fileContents)
+  const [fileTree, setFileTree] = useState<FileNode[]>(fallbackFileTree)
+  const [files, setFiles] = useState<Record<string, string>>(fallbackFileContents)
+  const [dirtyPaths, setDirtyPaths] = useState<Set<string>>(new Set())
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch('/api/workspace')
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Unable to load the local workspace')
+        return response.json() as Promise<{ tree: FileNode[]; files: { path: string; content: string }[] }>
+      })
+      .then((workspace) => {
+        setFileTree(workspace.tree)
+        setFiles(Object.fromEntries(workspace.files.map((file) => [file.path, file.content])))
+        const firstFile = workspace.files[0]?.path
+        if (firstFile) {
+          setOpenPaths([firstFile])
+          setActivePath(firstFile)
+        }
+      })
+      .catch((error: unknown) => setWorkspaceError(error instanceof Error ? error.message : 'Workspace unavailable'))
+  }, [])
 
   const openTabs = openPaths
     .map((path) => findNode(fileTree, path))
@@ -84,11 +104,34 @@ export function IdeWorkspace() {
 
   const activeNode = findNode(fileTree, activePath)
 
-  function editFile(path: string, content: string) {
+  function updateFile(path: string, content: string) {
     setFiles((prev) => ({ ...prev, [path]: content }))
+    setDirtyPaths((prev) => new Set(prev).add(path))
+  }
+
+  function editFile(path: string, content: string) {
+    updateFile(path, content)
     setFileTree((prev) => (findNode(prev, path) ? prev : insertFileNode(prev, path)))
     setOpenPaths((prev) => (prev.includes(path) ? prev : [...prev, path]))
     setActivePath(path)
+  }
+
+  async function saveFile(path: string) {
+    const response = await fetch('/api/workspace', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path, content: files[path] ?? '' }),
+    })
+    if (!response.ok) {
+      const result = await response.json().catch(() => ({}))
+      setWorkspaceError(result.error ?? 'Unable to save file')
+      return
+    }
+    setDirtyPaths((prev) => {
+      const next = new Set(prev)
+      next.delete(path)
+      return next
+    })
   }
 
   function openFile(node: FileNode) {
@@ -132,7 +175,7 @@ export function IdeWorkspace() {
           {sidebarView === 'files' && (
             <FileExplorer tree={fileTree} selectedPath={activePath} onSelectFile={openFile} />
           )}
-          {sidebarView === 'search' && <SearchPanel onSelectFile={openFile} />}
+          {sidebarView === 'search' && <SearchPanel onSelectFile={openFile} tree={fileTree} fileContents={files} />}
           {sidebarView === 'git' && <SourceControlPanel />}
           {sidebarView === 'extensions' && <ExtensionsPanel />}
         </div>
@@ -143,21 +186,32 @@ export function IdeWorkspace() {
             activePath={activePath}
             onSelect={setActivePath}
             onClose={closeTab}
+            dirtyPaths={dirtyPaths}
           />
+          {workspaceError && (
+            <div className="border-b border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+              {workspaceError}
+            </div>
+          )}
           {activeNode && (
-            <CodeEditor path={activeNode.path} content={files[activeNode.path] ?? ''} />
+            <CodeEditor
+              path={activeNode.path}
+              content={files[activeNode.path] ?? ''}
+              onChange={(content) => updateFile(activeNode.path, content)}
+              onSave={() => void saveFile(activeNode.path)}
+            />
           )}
         </div>
 
         {chatOpen && (
           <div className="w-[360px] shrink-0 border-l border-border">
-            <ChatPanel files={files} onEditFile={editFile} onClose={() => setChatOpen(false)} />
+            <ChatPanel files={files} tree={fileTree} onEditFile={editFile} onClose={() => setChatOpen(false)} />
           </div>
         )}
       </div>
       <StatusBar language={activeNode?.language ?? 'plaintext'} />
 
-      <QuickOpen open={quickOpenOpen} onOpenChange={setQuickOpenOpen} onSelectFile={openFile} />
+      <QuickOpen open={quickOpenOpen} onOpenChange={setQuickOpenOpen} onSelectFile={openFile} tree={fileTree} />
     </div>
   )
 }

@@ -5,8 +5,10 @@ shell in the browser — activity rail, file explorer, editor tabs, syntax-highl
 code view, status bar, ⌘P quick-open — around an AI chat panel that can actually edit
 the files it is shown.
 
-The editor operates on an in-memory **virtual filesystem** (defined in `lib/ide-data.ts`),
-not your real disk. Nothing the assistant writes touches the repository.
+The editor runs as a local workspace app: the Next.js server reads and writes the directory
+where it is started. The browser receives a workspace snapshot, while saves go through the
+local `/api/workspace` bridge. This is intended for local desktop use; do not expose the dev
+server to an untrusted network until authentication and sandboxing are added.
 
 ## Stack
 
@@ -59,21 +61,22 @@ app/
   page.tsx            renders <IdeWorkspace />
   layout.tsx          Geist fonts, forced dark theme, metadata
   globals.css         Tailwind v4 theme tokens + --syntax-* colors
-  api/chat/route.ts   streaming chat endpoint, exposes the editFile tool
+  api/chat/route.ts       streaming chat endpoint, exposes the editFile tool
+  api/workspace/route.ts  local filesystem read/save bridge
 components/
-  ide/                the IDE surface (11 components)
-  ui/                 shadcn primitives
+  ide/                    the IDE surface
+  ui/                     shadcn primitives
 lib/
-  ide-data.ts         virtual filesystem, git + extension fixtures
-  highlight.tsx       regex-based syntax highlighter
+  ide-data.ts             fallback data for panels and types
+  highlight.tsx           regex-based syntax highlighter
 ```
 
 ### State
 
 `components/ide/ide-workspace.tsx` is the single stateful hub. It owns the open tabs,
-active path, sidebar view, chat visibility, and the virtual filesystem (`fileTree` plus
-a `path -> content` map), and passes handlers down. Every other IDE component is
-presentational or locally stateful.
+active path, sidebar view, chat visibility, workspace snapshot, and dirty files, and
+passes handlers down. The local `/api/workspace` route is the filesystem boundary: it
+reads text files from the directory where Next.js is started and writes files on save.
 
 ### The agent loop
 
@@ -94,11 +97,11 @@ This is the part that genuinely works end to end:
 
 Deliberately mock, in case you plan to build on this:
 
-- Search, source control, and extensions panels read from static arrays in `lib/ide-data.ts`.
-- The ▶ Run button is a `setTimeout`, not a build.
-- The status bar's `Ln 12, Col 24` and problem count are hardcoded.
-- The editor is a read-only `<pre>` with a ~40-line regex highlighter — not Monaco or
-  CodeMirror, and not a real parser. Typing in the editor is not wired up.
+- Source control, extensions, and the ▶ Run button are still simulated.
+- The status bar's branch, problem count, and encoding are still mostly hardcoded.
+- The editor is now an editable textarea with line numbers, save shortcuts, dirty tabs,
+  and local saves; it still needs a full editor engine such as Monaco or CodeMirror for
+  syntax services, diagnostics, autocomplete, and robust editing.
 
 ## Known rough edges
 

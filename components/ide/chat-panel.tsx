@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useChat } from '@ai-sdk/react'
 import { DefaultChatTransport, lastAssistantMessageIsCompleteWithToolCalls } from 'ai'
 import { ArrowUp, AtSign, Check, ChevronDown, FileCode, Sparkles, X } from 'lucide-react'
-import { flattenFiles, fileTree } from '@/lib/ide-data'
+import { flattenFiles, type FileNode } from '@/lib/ide-data'
 import { cn } from '@/lib/utils'
 import {
   DropdownMenu,
@@ -25,16 +25,18 @@ export function ChatPanel({
   files,
   onEditFile,
   onClose,
+  tree,
 }: {
   files: Record<string, string>
   onEditFile: (path: string, content: string) => void
   onClose: () => void
+  tree: FileNode[]
 }) {
   const [mode, setMode] = useState<(typeof MODES)[number]>('Agent')
   const [model, setModel] = useState<(typeof MODELS)[number]>(MODELS[0])
   const [value, setValue] = useState('')
   const scrollRef = useRef<HTMLDivElement>(null)
-  const allFiles = flattenFiles(fileTree)
+  const allFiles = flattenFiles(tree)
 
   const { messages, sendMessage, addToolOutput, status, error } = useChat({
     transport: new DefaultChatTransport({ api: '/api/chat' }),
