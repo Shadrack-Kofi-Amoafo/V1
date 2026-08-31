@@ -38,6 +38,23 @@ export function ChatPanel({
   const scrollRef = useRef<HTMLDivElement>(null)
   const allFiles = flattenFiles(tree)
 
+  async function runLocalCommand(command: string) {
+    const start = await fetch('/api/terminal', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ command }),
+    })
+    const started = await start.json()
+    if (!start.ok) throw new Error(started.error ?? 'Command was rejected')
+    let result: { output: string; done: boolean; exitCode: number | null } = { output: '', done: false, exitCode: null }
+    while (!result.done) {
+      await new Promise((resolve) => window.setTimeout(resolve, 250))
+      const response = await fetch(`/api/terminal?id=${started.id}`)
+      result = await response.json()
+    }
+    return result
+  }
+
   const { messages, sendMessage, addToolOutput, status, error } = useChat({
     transport: new DefaultChatTransport({ api: '/api/chat' }),
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithToolCalls,
@@ -52,6 +69,24 @@ export function ChatPanel({
           toolCallId: toolCall.toolCallId,
           output: `Applied edit to ${path}`,
         })
+      }
+
+      if (toolCall.toolName === 'runCommand') {
+        const { command } = toolCall.input as { command: string }
+        try {
+          const result = await runLocalCommand(command)
+          addToolOutput({
+            tool: 'runCommand',
+            toolCallId: toolCall.toolCallId,
+            output: `Exit code: ${result.exitCode ?? 1}\n${result.output.slice(-8000)}`,
+          })
+        } catch (commandError) {
+          addToolOutput({
+            tool: 'runCommand',
+            toolCallId: toolCall.toolCallId,
+            output: commandError instanceof Error ? commandError.message : 'Command failed',
+          })
+        }
       }
     },
   })
@@ -135,17 +170,19 @@ export function ChatPanel({
                         const path = input?.path
 
                         return (
-                          <span
-                            key={index}
-                            className="inline-flex w-fit items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11.5px] text-muted-foreground"
-                          >
-                            {part.state === 'output-available' ? (
-                              <Check className="size-3 text-emerald-500" strokeWidth={2} />
-                            ) : (
-                              <FileCode className="size-3 animate-pulse" strokeWidth={1.75} />
-                            )}
-                            {part.state === 'output-available' ? 'Edited ' : 'Editing '}
-                            {path ?? '…'}
+                          <span key={index} className="inline-flex w-fit items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11.5px] text-muted-foreground">
+                            {part.state === 'output-available' ? <Check className="size-3 text-emerald-500" strokeWidth={2} /> : <FileCode className="size-3 animate-pulse" strokeWidth={1.75} />}
+                            {part.state === 'output-available' ? 'Edited ' : 'Editing '}{path ?? '…'}
+                          </span>
+                        )
+                      }
+
+                      if (part.type === 'tool-runCommand') {
+                        const input = part.input as { command?: string } | undefined
+                        return (
+                          <span key={index} className="inline-flex w-fit items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[11.5px] text-muted-foreground">
+                            <Sparkles className={cn('size-3', part.state !== 'output-available' && 'animate-pulse')} strokeWidth={1.75} />
+                            {part.state === 'output-available' ? 'Ran ' : 'Running '}{input?.command ?? '…'}
                           </span>
                         )
                       }

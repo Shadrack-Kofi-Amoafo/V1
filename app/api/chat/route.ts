@@ -68,6 +68,12 @@ ${
               content: z.string().describe('The complete new content of the file'),
             }),
           }),
+          runCommand: tool({
+            description: 'Run a safe local project command to validate or inspect the workspace. Use npm or pnpm scripts, git status/diff, or node commands.',
+            inputSchema: z.object({
+              command: z.string().describe('The local command to run, for example npm run typecheck or git diff --check'),
+            }),
+          }),
         }
       : undefined,
   })
