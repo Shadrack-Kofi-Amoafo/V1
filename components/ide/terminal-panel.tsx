@@ -10,6 +10,7 @@ export function TerminalPanel({ onClose, onDiagnostics, onSelectDiagnostic }: { 
   const [running, setRunning] = useState(false)
   const [command, setCommand] = useState('git status --short')
   const [diagnostics, setLocalDiagnostics] = useState<Diagnostic[]>([])
+  const [processId, setProcessId] = useState<string | null>(null)
 
   async function runCommand(value: string) {
     if (!value.trim() || running) return
@@ -21,13 +22,28 @@ export function TerminalPanel({ onClose, onDiagnostics, onSelectDiagnostic }: { 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ command: value }),
       })
-      const result = await response.json()
-      setOutput(`$ ${value}\n${result.output ?? result.error ?? 'No output'}\n\nExit code: ${result.exitCode ?? 0}`)
+      const started = await response.json()
+      if (!response.ok) throw new Error(started.error ?? 'Unable to start command')
+      setProcessId(started.id)
+      let result: { output: string; done: boolean; exitCode: number | null } = { output: '', done: false, exitCode: null }
+      while (!result.done) {
+        await new Promise((resolve) => window.setTimeout(resolve, 250))
+        const status = await fetch(`/api/terminal?id=${started.id}`)
+        result = await status.json()
+        setOutput(`$ ${value}\n${result.output}`)
+      }
+      setOutput(`$ ${value}\n${result.output}\n\nExit code: ${result.exitCode ?? 0}`)
     } catch (error) {
       setOutput(error instanceof Error ? error.message : 'Terminal unavailable')
     } finally {
+      setProcessId(null)
       setRunning(false)
     }
+  }
+
+  async function stopCommand() {
+    if (!processId) return
+    await fetch(`/api/terminal?id=${processId}`, { method: 'DELETE' })
   }
 
   async function run(script: 'typecheck' | 'lint' | 'build') {
@@ -67,7 +83,11 @@ export function TerminalPanel({ onClose, onDiagnostics, onSelectDiagnostic }: { 
       <form className="flex items-center gap-1 border-b border-border px-3 py-1.5" onSubmit={(event) => { event.preventDefault(); void runCommand(command) }}>
         <span className="font-mono text-[11px] text-muted-foreground">$</span>
         <input value={command} onChange={(event) => setCommand(event.target.value)} disabled={running} aria-label="Terminal command" className="min-w-0 flex-1 bg-transparent font-mono text-[11px] text-foreground outline-none" />
-        <button type="submit" disabled={running || !command.trim()} className="rounded border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50">Run</button>
+        {running ? (
+          <button type="button" onClick={() => void stopCommand()} className="rounded border border-destructive/50 px-2 py-1 text-[11px] text-destructive hover:bg-destructive/10">Stop</button>
+        ) : (
+          <button type="submit" disabled={!command.trim()} className="rounded border border-border px-2 py-1 text-[11px] text-muted-foreground hover:bg-accent hover:text-foreground disabled:opacity-50">Run</button>
+        )}
       </form>
       <div className="flex items-center gap-1 border-b border-border px-3 py-1.5">
         {(['typecheck', 'lint', 'build'] as const).map((script) => (
