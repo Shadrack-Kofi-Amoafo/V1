@@ -5,10 +5,11 @@ import { X, Trash2 } from 'lucide-react'
 
 export type Diagnostic = { file: string; line: number; column: number; message: string; severity: 'error' | 'warning' }
 
-export function TerminalPanel({ onClose, onDiagnostics }: { onClose: () => void; onDiagnostics: (diagnostics: Diagnostic[]) => void }) {
+export function TerminalPanel({ onClose, onDiagnostics, onSelectDiagnostic }: { onClose: () => void; onDiagnostics: (diagnostics: Diagnostic[]) => void; onSelectDiagnostic: (diagnostic: Diagnostic) => void }) {
   const [output, setOutput] = useState('Local runner ready. Use Run to execute the project typecheck.\n')
   const [running, setRunning] = useState(false)
   const [command, setCommand] = useState('git status --short')
+  const [diagnostics, setLocalDiagnostics] = useState<Diagnostic[]>([])
 
   async function runCommand(value: string) {
     if (!value.trim() || running) return
@@ -39,7 +40,9 @@ export function TerminalPanel({ onClose, onDiagnostics }: { onClose: () => void;
         body: JSON.stringify({ script }),
       })
       const result = await response.json()
-      onDiagnostics(result.diagnostics ?? [])
+      const nextDiagnostics = result.diagnostics ?? []
+      setLocalDiagnostics(nextDiagnostics)
+      onDiagnostics(nextDiagnostics)
       setOutput(`${result.output ?? result.error ?? 'No output'}\n\nExit code: ${result.exitCode ?? 0}`)
     } catch (error) {
       setOutput(error instanceof Error ? error.message : 'Runner unavailable')
@@ -73,6 +76,16 @@ export function TerminalPanel({ onClose, onDiagnostics }: { onClose: () => void;
           </button>
         ))}
       </div>
+      {diagnostics.length > 0 && (
+        <div className="max-h-24 overflow-auto border-b border-border px-3 py-1.5">
+          <p className="mb-1 text-[10px] font-semibold tracking-wide text-destructive">PROBLEMS ({diagnostics.length})</p>
+          {diagnostics.map((diagnostic, index) => (
+            <button key={`${diagnostic.file}-${diagnostic.line}-${index}`} type="button" onClick={() => onSelectDiagnostic(diagnostic)} className="block w-full truncate text-left text-[11px] text-muted-foreground hover:text-foreground">
+              <span className={diagnostic.severity === 'error' ? 'text-destructive' : 'text-amber-400'}>{diagnostic.severity}</span>{' '}{diagnostic.file}:{diagnostic.line}:{diagnostic.column} — {diagnostic.message}
+            </button>
+          ))}
+        </div>
+      )}
       <pre className="flex-1 overflow-auto px-3 py-2 font-mono text-[11px] leading-relaxed text-foreground/80">{output}</pre>
     </section>
   )

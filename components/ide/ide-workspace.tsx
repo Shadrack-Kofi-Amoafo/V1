@@ -264,7 +264,19 @@ export function IdeWorkspace() {
               diagnostics={diagnostics}
             />
           )}
-          {terminalOpen && <TerminalPanel onClose={() => setTerminalOpen(false)} onDiagnostics={setDiagnostics} />}
+          {terminalOpen && (
+            <TerminalPanel
+              onClose={() => setTerminalOpen(false)}
+              onDiagnostics={setDiagnostics}
+              onSelectDiagnostic={(diagnostic) => {
+                const node = findNode(fileTree, diagnostic.file) ?? findNode(fileTree, diagnostic.file.replace(/^.*\//, ''))
+                if (node) {
+                  openFile(node)
+                  setTerminalOpen(false)
+                }
+              }}
+            />
+          )}
         </div>
 
         {chatOpen && (
